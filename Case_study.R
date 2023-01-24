@@ -206,10 +206,5 @@ ggplot(data=combined_daily_sleep,
        y = "Sedentary Activity Hours")
 
 
-#ACT
-
-# Recommendations
-
-
 
 
