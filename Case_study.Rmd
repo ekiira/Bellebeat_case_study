@@ -1,0 +1,303 @@
+---
+title: "Bellabeat Case Study"
+author: "Oluwatosin Jimoh"
+date: "2023-01-17"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## About the company
+Bellabeat, a high-tech company that manufactures health-focused smart products that informs and inspires women around the world. Collecting data on activity, sleep, stress, and reproductive health has allowed Bellabeat to empower women with knowledge about their own health and habits. Since it was founded in 2013, Bellabeat has grown rapidly and quickly positioned itself as a tech-driven wellness company for women.
+
+## Products
+1. Bellabeat app: The Bellabeat app provides users with health data related to their activity, sleep, stress, menstrual cycle, and mindfulness habits. This data can help users better understand their current habits and make healthy decisions. The Bellabeat app connects to their line of smart wellness products.
+2. Leaf: Bellabeat’s classic wellness tracker can be worn as a bracelet, necklace, or clip. The Leaf tracker connects to the Bellabeat app to track activity, sleep, and stress.
+3. Time: This wellness watch combines the timeless look of a classic timepiece with smart technology to track user activity, sleep, and stress. The Time watch connects to the Bellabeat app to provide you with insights into your daily wellness.
+4. Spring: This is a water bottle that tracks daily water intake using smart technology to ensure that you are appropriately hydrated throughout the day. The Spring bottle connects to the Bellabeat app to track your hydration levels.
+
+I would be focusing on Time Watch for my insights
+
+## Business Task
+Analyze smart device data to unlock new growths and guide new marketing strategies for Bellabeat.
+
+## Stakeholders
+1. Bellabeat’s co-founder and Chief Creative Officer, Urška Sršen
+2. Mathematician and Bellabeat’s cofounder; a key member of the Bellabeat executive team, Sando Mur.
+3. Bellabeat marketing analytics team
+
+## Dataset
+[FitBit Fitness Tracker Data](https://www.kaggle.com/datasets/arashnic/fitbit) (CC0: Public Domain, dataset made available through [Mobius](https://www.kaggle.com/arashnic)): This Kaggle data set contains personal fitness tracker from thirty fitbit users. Thirty eligible Fitbit users consented to the submission of personal tracker data, including minute-level output for physical activity, heart rate, and sleep monitoring. It includes information about daily activity, steps, and heart rate that can be used to explore users’ habits.
+
+## Data Limitations¶
+1. Not enough data - only 30 fitbit users submiited their personal data.
+2. Outdated - Data was last collected 2016.
+3. Data does not include age group, gender, which is a much needed crtieria as Bellabeat specificaly caters to health of women.
+Overall this dataset is biased, and I recommend additional data that is up to date.
+
+## Setting up my environment
+Install and load `tidyverse` and `lubridate` packages. 
+To install,
+install.packages("tidyverse")
+install.packages("lubridate")
+
+load packages
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+
+
+## Import Dataset
+
+```{r}
+# Load CSV files and Create Dataframes
+daily_activity <- read_csv('FitBit_Dataset/dailyActivity_merged.csv')
+sleep_day <- read_csv('FitBit_Dataset/sleepDay_merged.csv')
+weightLog <- read_csv('FitBit_Dataset/weightLogInfo_merged.csv')
+```
+
+### Preview created dataframes
+```{r}
+## Preview the data_activity dataframe
+head(daily_activity)
+colnames(daily_activity)
+
+## preview the sleep_day dataframe
+head(sleep_day)
+colnames(sleep_day)
+
+## preview the weightLog dataframe
+head(weightLog)
+colnames(weightLog)
+```
+
+
+## Data Cleaning
+
+**Check for duplicate data**
+```{r}
+sum(duplicated(daily_activity))
+sum(duplicated(sleep_day))
+sum(duplicated(weightLog))
+```
+Sleep_day has 3 duplicates
+
+Remove sleep_day duplicates
+```{r}
+sleep_day_cleaned <- unique(sleep_day)
+#check
+sum(duplicated(sleep_day_cleaned))
+```
+
+
+**Rename `ActivityDate` and `SleepDay` to `Date` for consistency when merging later on. Also change format to Date for the 3 data frames**
+```{r}
+# rename ActivityDate column and SleepDay and change the format Date
+daily_activity_cleaned <- daily_activity %>%
+  rename(Date = ActivityDate) %>%
+  mutate(Date = mdy(Date))
+sleep_day_cleaned <- sleep_day_cleaned %>%
+  rename(Date = SleepDay) %>%
+  mutate(Date = mdy_hms(Date))
+
+# change weightLog$Date date format
+weightLog_cleaned <- weightLog %>%
+  mutate(Date = mdy_hms(Date))
+
+# check
+str(daily_activity_cleaned)
+str(sleep_day_cleaned)
+str(weightLog_cleaned)
+```
+
+
+**Handle Missing Values**
+```{r}
+# check for missing values
+sum(is.na(daily_activity_cleaned))
+sum(is.na(sleep_day_cleaned))
+sum(is.na(weightLog_cleaned))
+
+# `weightLog_cleaned` has 65 missing values
+colSums(is.na(weightLog_cleaned)) 
+nrow(weightLog_cleaned)
+# The missing values are in the `Fat` column. The number of rows in the `weightLog_cleaned` df is 67, meaning only 2 values in the column are available.
+# Also as this is a third party dataset It is not certain what the missing values could be, 
+# Therefore, we delete the `Fat` column. It also won't ulter our analysis because I would not be needing the`Fat` column.  
+weightLog_cleaned <- weightLog_cleaned[,-5]
+
+#check
+colnames(weightLog_cleaned)
+colSums(is.na(weightLog_cleaned))
+```
+
+Check numbers of users in each data frame
+```{r}
+n_distinct(daily_activity_cleaned$Id)
+n_distinct(sleep_day_cleaned$Id)
+n_distinct(weightLog_cleaned$Id)
+# more users logged in daily_activity than sleep_day data and weightLog
+```
+
+
+**Look for 0 values**
+```{r}
+## TotalSteps, TotalDistance and Calories have values of 0, which can not be possible, in order to eliminate bias, we delete the rows 
+daily_activity_cleaned <- daily_activity_cleaned %>% 
+  filter(TotalSteps > 0, TotalDistance > 0, Calories > 0) 
+#check
+sum(daily_activity_cleaned$TotalSteps <= 0)
+sum(daily_activity_cleaned$TotalDistance <= 0)
+
+## Fortunately `weightLog_cleaned` and `sleep_day_cleaned` have no observation with 0 values
+##check number of rows
+nrow(daily_activity_cleaned)
+nrow(sleep_day_cleaned)
+nrow(weightLog_cleaned)
+sum(daily_activity_cleaned$Calories <= 0)
+```
+
+
+
+## Data Summary
+Find the summary of the data frames
+
+```{r}
+#daily_activity_cleaned
+daily_activity_cleaned %>%
+  select(TotalSteps, TotalDistance, Calories, SedentaryMinutes) %>%
+  summary()
+
+#sleep_day_cleaned
+sleep_day_cleaned %>%
+  select(TotalSleepRecords, TotalMinutesAsleep, TotalTimeInBed) %>%
+  summary()
+
+#weightLog_cleaned
+weightLog_cleaned %>%
+  select(BMI,WeightKg) %>%
+  summary()
+```
+
+## FINDINGS
+1.  Average Total steps = 8329
+2.  Average Total Distance  = 5.986km
+3.  Average sedentary minutes = 955.2 minutes , aprrox 16 hours
+4.  Average calories burned = 2362 kcals
+5.  Average Sleep Records = 1.12
+6.  Average Minutes asleep = 419.2 minutes apprrox 7 hours of sleep
+7.  Average Time in bed = 458.5 minutes
+8.  Average BMI = 25.19
+9.  Average weight in kg = 72.04
+
+All these are subject to bias because it is not specified the gender of the participants and also we do not have enough data.
+
+## Merge dataframes
+To discover more relationships and trends in visualizations, I need to merge dataframes.
+```{r}
+#daily_activity_cleaned and sleep_day_cleaned
+combined_daily_sleep <- merge(daily_activity_cleaned, sleep_day_cleaned, by= c("Id", "Date"))
+
+#daily_activity_cleaned, weightLog_cleaned
+combined_daily_weight <- merge(daily_activity_cleaned, weightLog_cleaned, by= c("Id", "Date"))
+```
+
+
+## Visualizations
+Create data visualizations to show relationships and trends
+
+Relationship between Total steps and Calories burned
+```{r}
+ggplot(data=daily_activity_cleaned, 
+       aes(x=TotalSteps, y=Calories )) + 
+  geom_point(aes(color=Calories)) +
+  geom_smooth() +
+  labs(title="Total steps vs Calories Burned",
+       x = "Total Steps",
+       y = "Calories burned")
+
+```
+There's a positive relationship between total steps and calories burned, the more steps a user takes, the more calories are being burned.
+
+
+Relationship between sedentary minutes and calories burned
+```{r}
+ggplot(data=daily_activity_cleaned, 
+     aes(x=SedentaryMinutes, y=Calories)) + 
+  geom_point(aes(color=Calories)) +
+  geom_smooth() +
+  labs(title="Sedentary Minutes vs Calories Burned",
+       x = "Sedentary Minutes",
+       y = "Calories burned")
+```
+We can see that the more the user's sedentary minutes the less calories burned. Decreasing time spent in sedentary activities can help burn more calories
+
+Relationship between total steps and BMI
+```{r}
+ggplot(data=combined_daily_weight, 
+       aes(x=TotalSteps, y=BMI)) + 
+  geom_point(aes(color=BMI)) +
+  geom_smooth() +
+  labs(title="Total Steps vs BMI",
+       x = "Total Steps",
+       y = "BMI")
+```
+ The lower your steps count, higher your BMI. According to our analysis the Average BMI of participants is 25.19, which can be considered overweight accordinfg to CDC.gov, ("If your BMI is 25.0 to 29.9, it falls within the overweight range."). 
+ 
+Relationship between sedentaryMinutes and BMI
+```{r}
+ggplot(data=combined_daily_weight, 
+       aes(x=BMI, y=SedentaryMinutes)) + 
+  geom_point(aes(color=BMI)) +
+  geom_smooth() +
+  labs(title="BMI vs Sedentary Minutes ",
+       x = "BMI",
+       y = "Sedentary Minutes")
+```
+The higher the sedentary minutes, the higher the BMI. This can also contribute to increase in BMI of users.
+
+Number of Hours asleep per day
+```{r}
+ggplot(data = sleep_day_cleaned, mapping = aes(x=TotalMinutesAsleep/60)) + 
+ geom_histogram( color="white", fill="navyblue",binwidth = 1) +
+  labs(title = "Amount of sleep hours per day", x = "Number of hours asleep")
+```
+Highest numbers of hours users sleep daily is 7 hours, which can be considered good but for the recommend amount of sleep in a day
+
+Relationship between Sedentary activity and Time asleep
+```{r} 
+ggplot(data=combined_daily_sleep, 
+         aes(x=TotalMinutesAsleep/60, y=SedentaryMinutes/60)) + 
+  geom_point() +
+  geom_smooth() +
+  labs(title="Hours Asleep vs Sedentary Activity Hours",
+       x = "Hours Asleep",
+       y = "Sedentary Activity Hours")
+       
+```
+This is a negative correlation and not causation as we can't explicitly say more time spent in sedentary activities causes less hours of sleep. There are other factors that contributes to less hours of sleep like, insomnia, strong intake of caffeine e.t.c
+
+## Conclusion and Recommendations
+
+#### **BMI**
+Average BMI of users is 25.19 which is consisidered overweight according to CDC According to our analysis taking less steps per day and having a sedentary lifestyle can contribute to the increase in BMI. (Note: There are other factors that contribute to the increase in BMI, so this is biased as a result of the limitations in data.)
+
+**Recommendation**: Set daily steps goals and reminders for overweight and obese users. Also, since a sedentary lifestyle can be as a result of the user's nature of job, we could also add reminders to take walks early hours of the morning before work or evenings after work.
+
+#### **Sleep**
+Average hours of sleep for users is approximately 7 hours, which can be considered good. But this result is biased as the data doesn't specify the age-group, health issues of each users which contribute to how many hours of sleep one needs in a day.
+
+**Recommendation**: Reduce hours of sedentary activities and encourage an active lifestyle by setting up limited amount of time doing sedentary activities and puting up notifications on Time Watch to go for walks, exercise. Additonally, Time Watch can recommend a sleep schedule for users to follow and add alarms.
+
+####**Recommendation for Bellabeat Marketing Strategy.**
+Know your user so as to cater specifically to their needs. For example, you cannot advise an underweight user to take more steps to reduce weight; that would be considered insensitive. To collect more information on users, you can send in weekly or monthly surveys. Gift cards can be included to encourage survey participation. And for users that are skeptically on inputting their data, You could add in details how their data will be used and ensure data/privacy security.
+
+Additional data, would be needed for detailed recommendations.
+
+
+This is my first data analytics case study. I welcome your suggestions and comments. Thank you.
